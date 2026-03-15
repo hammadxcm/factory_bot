@@ -79,6 +79,93 @@ describe "using ActiveSupport::Instrumentation to track run_factory interaction"
   end
 end
 
+describe "using ActiveSupport::Instrumentation to track before_run_factory interaction" do
+  before do
+    define_model("User", email: :string)
+    define_model("Post", user_id: :integer) do
+      belongs_to :user
+    end
+
+    FactoryBot.define do
+      factory :user do
+        email { "john@example.com" }
+      end
+
+      factory :post do
+        trait :with_user do
+          user
+        end
+      end
+    end
+  end
+
+  it "builds the correct payload" do
+    tracked_payloads = []
+    callback = ->(_name, _start, _finish, _id, payload) { tracked_payloads << payload }
+
+    ActiveSupport::Notifications.subscribed(callback, "factory_bot.before_run_factory") do
+      FactoryBot.build(:user)
+      FactoryBot.create(:post, :with_user)
+    end
+
+    user_payload = tracked_payloads.detect { |p| p[:name] == :user }
+    expect(user_payload[:strategy]).to eq(:build)
+    expect(user_payload[:traits]).to eq([])
+    expect(user_payload[:overrides]).to eq({})
+    expect(user_payload[:factory]).to be_a(FactoryBot::Factory)
+
+    post_payload = tracked_payloads.detect { |p| p[:name] == :post }
+    expect(post_payload[:strategy]).to eq(:create)
+    expect(post_payload[:traits]).to eq([:with_user])
+    expect(post_payload[:factory]).to be_a(FactoryBot::Factory)
+  end
+
+  it "fires before run_factory completes" do
+    events = []
+
+    before_callback = ->(_name, _start, _finish, _id, payload) {
+      events << [:before, payload[:name]]
+    }
+    run_callback = ->(_name, _start, _finish, _id, payload) {
+      events << [:run, payload[:name]]
+    }
+
+    ActiveSupport::Notifications.subscribed(before_callback, "factory_bot.before_run_factory") do
+      ActiveSupport::Notifications.subscribed(run_callback, "factory_bot.run_factory") do
+        FactoryBot.build(:user)
+      end
+    end
+
+    expect(events).to eq([[:before, :user], [:run, :user]])
+  end
+
+  it "captures nested factory call stack" do
+    call_stack = []
+
+    before_callback = ->(_name, _start, _finish, _id, payload) {
+      call_stack.push(payload[:name])
+    }
+    run_callback = ->(_name, _start, _finish, _id, payload) {
+      call_stack.pop
+    }
+
+    stack_during_user_build = nil
+    user_before = ->(_name, _start, _finish, _id, payload) {
+      stack_during_user_build = call_stack.dup if payload[:name] == :user
+    }
+
+    ActiveSupport::Notifications.subscribed(before_callback, "factory_bot.before_run_factory") do
+      ActiveSupport::Notifications.subscribed(run_callback, "factory_bot.run_factory") do
+        ActiveSupport::Notifications.subscribed(user_before, "factory_bot.before_run_factory") do
+          FactoryBot.create(:post, :with_user)
+        end
+      end
+    end
+
+    expect(stack_during_user_build).to eq([:post, :user])
+  end
+end
+
 describe "using ActiveSupport::Instrumentation to track compile_factory interaction" do
   before do
     define_model("User", name: :string, email: :string)

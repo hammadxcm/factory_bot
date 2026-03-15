@@ -25,6 +25,8 @@ module FactoryBot
         factory: factory
       }
 
+      ActiveSupport::Notifications.instrument("factory_bot.before_run_factory", instrumentation_payload)
+
       ActiveSupport::Notifications.instrument("factory_bot.run_factory", instrumentation_payload) do
         factory.run(runner_strategy, @overrides, &block)
       end

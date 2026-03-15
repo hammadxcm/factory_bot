@@ -2084,6 +2084,26 @@ config.after(:suite) do
 end
 ```
 
+You can also subscribe to `factory_bot.before_run_factory` to be notified
+before a factory is run. This is useful for building a factory call stack when
+debugging deeply nested associations:
+
+```ruby
+factory_call_stack = []
+
+ActiveSupport::Notifications.subscribe("factory_bot.before_run_factory") do |name, start, finish, id, payload|
+  factory_call_stack.push(payload[:name])
+end
+
+ActiveSupport::Notifications.subscribe("factory_bot.run_factory") do |name, start, finish, id, payload|
+  factory_call_stack.pop
+end
+```
+
+The payload for `factory_bot.before_run_factory` contains the same keys as
+`factory_bot.run_factory`: `:name`, `:strategy`, `:traits`, `:overrides`, and
+`:factory`.
+
 Another example could involve tracking the attributes and traits that factories are compiled with. If you're using RSpec, you could add `before(:suite)` and `after(:suite)` blocks that subscribe to `factory_bot.compile_factory` notifications:
 
 ```ruby

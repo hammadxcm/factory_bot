@@ -1,5 +1,9 @@
 # News
 
+## Unreleased
+
+* Feat: Added `factory_bot.before_run_factory` instrumentation event
+
 ## 6.5.6 (October 22, 2025)
 
 * Fix: Enforce association override precedence over trait foreign keys by @JinOketani in [#1768](https://github.com/thoughtbot/factory_bot/pull/1768)
